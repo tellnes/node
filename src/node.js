@@ -558,7 +558,6 @@
       domain.kill();
     }
 
-  debugger;
     domain.exit();
 
     NativeModule.require('domain').pollNewDomains();

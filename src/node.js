@@ -28,6 +28,7 @@
   global = this;
 
   var EventEmitter;
+  var domains;
 
   function startup() {
 
@@ -68,10 +69,13 @@
 
     startup.resolveArgv0();
 
+    domains = NativeModule.require('domains');
+
     // There are various modes that Node can run in. The most common two
     // are running from a script and running the REPL - but there are a few
     // others like the debugger or running --eval arguments. Here we decide
     // which mode we run in.
+   
 
     if (NativeModule.exists('_third_party_main')) {
       // To allow people to extend Node in different ways, this hook allows
@@ -198,7 +202,6 @@
       if (l === 0) return;
 
       if (process.features.domains) {
-        var domains = NativeModule.require('domains');
         assert(domains.getCurrent() == domains.defaultDomain);
       }
 
@@ -538,6 +541,7 @@
 
   // The single entry point for all outside world calls into Javascript.
   // (It may not yet be th single entry point yet. v0.6 requires it to be.)
+  // VERY HOT
   function dispatch(obj, method, arg0, arg1, arg2, arg3) {
     assert(arguments.length < 7);
  
@@ -545,7 +549,7 @@
     if (obj.domain) {
       domain = obj.domain
     } else {
-      domain = NativeModule.require('domains').defaultDomain;
+      domain = domains.defaultDomain;
     }
 
     domain.enter();
@@ -564,7 +568,7 @@
 
     domain.exit();
 
-    NativeModule.require('domains').pollNewDomains();
+    domains.pollNewDomains();
   }
 
   startup();

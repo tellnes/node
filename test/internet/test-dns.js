@@ -377,3 +377,32 @@ TEST(function test_lookup_localhost_ipv4(done) {
 
   checkWrap(req);
 }); */
+
+
+// Must be last, changes the list of DNS servers to resolve against.
+TEST(function test_set_servers_ok(done) {
+  dns.setServers(['8.8.8.8']);
+
+  var req = dns.reverse('8.8.8.8', function(err, hostnames) {
+    if (err) throw err;
+    assert.deepEqual(['google-public-dns-a.google.com'], hostnames);
+    done();
+  });
+
+  checkWrap(req);
+});
+
+
+TEST(function test_set_servers_fail_1(done) {
+  var gotException = false;
+
+  try {
+    dns.setServers(['not an IP address']);
+  }
+  catch (e) {
+    gotException = true;
+  }
+
+  assert.ok(gotException);
+  done();
+});

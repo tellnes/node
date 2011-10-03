@@ -592,73 +592,44 @@ static Handle<Value> QueryWithFamily(const Arguments& args) {
 }
 
 
-class SetServers {
- public:
-  static Handle<Value> Init(const Arguments& args) {
-    HandleScope scope;
+static Handle<Value> SetServers(const Arguments& args) {
+  HandleScope scope;
 
-    assert(!args.IsConstructCall());
-    assert(args.Length() >= 1);
+  assert(!args.IsConstructCall());
+  assert(args.Length() >= 1);
 
-    Local<Array> servers_handle = Local<Array>::Cast(args[0]);
+  Local<Array> servers_handle = Local<Array>::Cast(args[0]);
 
-    struct ares_addr_node *srvr, *servers = NULL;
+  int servers_len = servers_handle->Length();
 
-    int servers_len = servers_handle->Length();
-
-    for (int i = 0; i < servers_len; i++) {
-      if (servers_handle->Get(i)->IsUndefined()) continue;
-      String::Utf8Value ip(servers_handle->Get(i)->ToString());
-
-      srvr = (ares_addr_node *) malloc(sizeof(struct ares_addr_node));
-      if (!srvr) {
-        destroy_addr_list(servers);
-        SetAresErrno(ARES_ENOMEM);
-        return scope.Close(v8::Null());
-      }
-
-      append_addr_list(&servers, srvr);
-
-      if (uv_inet_pton(AF_INET, *ip, &srvr->addr.addr4) > 0) {
-        srvr->family = AF_INET;
-      }
-      else if (uv_inet_pton(AF_INET6, *ip, &srvr->addr.addr6) > 0) {
-        srvr->family = AF_INET6;
-      }
-    }
-
-    int status = ares_set_servers(ares_channel, servers);
-    destroy_addr_list(servers);
-
-    if (status != ARES_SUCCESS) {
-      SetAresErrno(status);
-    }
+  struct ares_addr_node *servers = (ares_addr_node *) malloc(sizeof(*servers) * servers_len);
+  if (!servers) {
+    SetAresErrno(ARES_ENOMEM);
     return scope.Close(v8::Null());
   }
 
- private:
-  static void append_addr_list(struct ares_addr_node **head, struct ares_addr_node *node) {
-    struct ares_addr_node *last;
-    node->next = NULL;
-    if(*head) {
-      last = *head;
-      while(last->next)
-        last = last->next;
-      last->next = node;
-    }
-    else {
-      *head = node;
-    }
-  }
-  static void destroy_addr_list(struct ares_addr_node *head) {
-    while(head)  {
-      struct ares_addr_node *detached = head;
-      head = head->next;
-      free(detached);
-    }
-  }
+  for (int i = 0; i < servers_len; ++i) {
+    String::Utf8Value ip(servers_handle->Get(i));
 
-};
+    if (uv_inet_pton(AF_INET, *ip, &servers->addr.addr4) > 0) {
+      servers[i].family = AF_INET;
+    }
+    else if (uv_inet_pton(AF_INET6, *ip, &servers->addr.addr6) > 0) {
+      servers[i].family = AF_INET6;
+    }
+
+    servers[i].next = &servers[i + 1];
+  }
+  servers[servers_len - 1].next = NULL;
+
+  int status = ares_set_servers(ares_channel, servers);
+  free(servers);
+
+  if (status != ARES_SUCCESS) {
+    SetAresErrno(status);
+  }
+  return scope.Close(v8::Null());
+}
 
 
 static void Initialize(Handle<Object> target) {
@@ -681,7 +652,7 @@ static void Initialize(Handle<Object> target) {
   NODE_SET_METHOD(target, "querySrv", Query<QuerySrvWrap>);
   NODE_SET_METHOD(target, "getHostByAddr", Query<GetHostByAddrWrap>);
   NODE_SET_METHOD(target, "getHostByName", QueryWithFamily<GetHostByNameWrap>);
-  NODE_SET_METHOD(target, "setServers", SetServers::Init);
+  NODE_SET_METHOD(target, "setServers", SetServers);
 
   target->Set(String::NewSymbol("AF_INET"), Integer::New(AF_INET));
   target->Set(String::NewSymbol("AF_INET6"), Integer::New(AF_INET6));
